@@ -4,6 +4,7 @@ var Sim = (function () {
   function S() { return G.S; }
 
   function makeSchedule(ids) {
+    var GAMES = (S() && S().len) || 82;
     var list = ids.slice(); if (list.length % 2) list.push('BYE');
     U.shuffle(list);
     var n = list.length, cnt = {}, days = [], flip = false;
@@ -58,6 +59,10 @@ var Sim = (function () {
     while (hs === as) { ot++; hs += U.ri(6, 14); as += U.ri(6, 14); }
     var box = {};
     box[h] = boxScore(h, hs, ot); box[a] = boxScore(a, as, ot);
+    return record(h, a, hs, as, ot, box, playoff);
+  }
+  function record(h, a, hs, as, ot, box, playoff) {
+    var s = S();
     var hw = hs > as, th = L.team(h), ta = L.team(a);
     if (!playoff) {
       th.w += hw ? 1 : 0; th.l += hw ? 0 : 1; ta.w += hw ? 0 : 1; ta.l += hw ? 1 : 0;
@@ -78,17 +83,37 @@ var Sim = (function () {
       var r = x.p.r || [10, 4, 2, 1, .5];
       var e = r[0] * m / 36 * (0.65 + U.rnd() * 0.7);
       exp += e;
-      lines.push({ id: x.p.id, n: x.p.n, min: m, e: e, reb: Math.max(0, Math.round(r[1] * m / 36 * (0.6 + U.rnd() * 0.8))), ast: Math.max(0, Math.round(r[2] * m / 36 * (0.55 + U.rnd() * 0.9))), stl: U.rnd() < r[3] * m / 36 ? U.ri(1, 2) : 0, blk: U.rnd() < r[4] * m / 36 ? U.ri(1, 3) : 0 });
+      lines.push({ p: x.p, id: x.p.id, n: x.p.n, min: m, e: e, reb: Math.max(0, Math.round(r[1] * m / 36 * (0.6 + U.rnd() * 0.8))), ast: Math.max(0, Math.round(r[2] * m / 36 * (0.55 + U.rnd() * 0.9))), stl: U.rnd() < r[3] * m / 36 ? U.ri(1, 2) : 0, blk: U.rnd() < r[4] * m / 36 ? U.ri(1, 3) : 0 });
     });
     var f = exp > 0 ? score / exp : 0, used = 0;
     lines.forEach(function (l) { l.pts = Math.max(0, Math.round(l.e * f)); used += l.pts; delete l.e; });
     if (lines.length) { lines.sort(function (a, b) { return b.pts - a.pts; }); lines[0].pts = Math.max(0, lines[0].pts + score - used); }
+    lines.forEach(function (l) { split(l); delete l.p; });
     return lines;
+  }
+  // turn points into made/attempted 2s, 3s and free throws that add up
+  function split(l) {
+    var sp = Live.shoot(l.p), pts = l.pts, r = l.p.r || [10, 4, 2, 1, .5];
+    var p3 = U.clamp(sp.a3 / (r[0] * 0.82 + 1), 0.02, 0.7);
+    var ftShare = 0.15 + U.rnd() * 0.08;
+    var ftm = Math.min(pts, Math.round(pts * ftShare));
+    var tpm = Math.max(0, Math.round((pts - ftm) * p3 * sp.p3 * 3 / (p3 * sp.p3 * 3 + (1 - p3) * 0.53 * 2) / 3 * (0.6 + U.rnd() * 0.8)));
+    while (tpm * 3 > pts - ftm) tpm--;
+    var rest = pts - ftm - tpm * 3;
+    if (rest % 2) { if (ftm > 0 || rest === 1) { ftm++; rest--; } }
+    var twm = Math.max(0, rest / 2);
+    if (twm % 1) { twm = Math.floor(twm); ftm++; }
+    var tpa = tpm ? Math.round(tpm / Math.max(0.2, sp.p3 * (0.85 + U.rnd() * 0.3))) : (U.rnd() < p3 * l.min / 20 ? U.ri(1, 3) : 0);
+    var twa = twm ? Math.round(twm / (0.5 + U.rnd() * 0.12)) : (l.min > 5 ? U.ri(0, 3) : 0);
+    var fta = ftm ? Math.max(ftm, Math.round(ftm / Math.max(0.5, sp.ft))) : (U.rnd() < 0.15 ? 2 : 0);
+    l.pts = twm * 2 + tpm * 3 + ftm;
+    l.fgm = twm + tpm; l.fga = Math.max(twm + tpm, twa + tpa); l.tpm = tpm; l.tpa = Math.max(tpm, tpa); l.ftm = ftm; l.fta = fta;
   }
   function applyBox(lines) {
     lines.forEach(function (l) {
       var p = L.player(l.id); if (!p) return;
       var st = p.st; st.g++; st.min += l.min; st.pts += l.pts; st.reb += l.reb; st.ast += l.ast; st.stl += l.stl; st.blk += l.blk;
+      ['fgm', 'fga', 'tpm', 'tpa', 'ftm', 'fta'].forEach(function (k) { st[k] = (st[k] || 0) + (l[k] || 0); });
     });
   }
   function injuries(tid) {
@@ -101,24 +126,56 @@ var Sim = (function () {
     });
   }
 
-  function simDay() {
+  function simDay(live) {
     var s = S();
-    if (s.phase !== 'regular') return false;
+    if (s.phase !== 'regular' || s.live) return false;
     if (s.day >= s.sched.length) { startPlayoffs(); return false; }
     var day = s.sched[s.day];
-    var played = {};
+    var played = {}, mine = null;
     day.forEach(function (m) {
-      var g = playGame(m[0], m[1]);
       played[m[0]] = played[m[1]] = 1;
+      if (live && (m[0] === s.user || m[1] === s.user)) { mine = m; return; }
+      var g = playGame(m[0], m[1]);
       s.games.push(g);
     });
+    if (mine) { s.live = Live.create(mine[0], mine[1], { kind: 'reg' }); s.livePlayed = played; return 'live'; }
+    endDay(played);
+    return true;
+  }
+  function endDay(played) {
+    var s = S();
     for (var k in s.players) { var p = s.players[k]; if (p.inj > 0 && (played[p.t] || p.t === 'FA')) p.inj--; }
     s.day++;
     s.dayLabel = 'Day ' + (s.day + 1);
     if (s.day % 7 === 0) { Trade.cpuWeekly(); Off.cpuFillRosters(); L.setStrategies(); }
     if (s.day === s.deadline) L.news('The trade deadline has passed. No more trades until the offseason.', 'big');
     if (s.day >= s.sched.length) { startPlayoffs(); }
-    return true;
+  }
+  // play your next game live: sims every day before it, then opens your game
+  function startUserGame() {
+    var s = S();
+    if (s.live) return true;
+    if (s.phase === 'playoffs') return startPlayoffLive();
+    var d = userNextGameDay();
+    if (d < 0) return false;
+    while (s.phase === 'regular' && s.day < d) simDay();
+    if (s.phase !== 'regular') return false;
+    return simDay(true) === 'live';
+  }
+  function finishLive() {
+    var s = S(), st = s.live; if (!st || !st.done) return null;
+    var box = {}; box[st.h] = Live.lines(st, 'h'); box[st.a] = Live.lines(st, 'a');
+    var g = record(st.h, st.a, st.sc.h, st.sc.a, st.ot, box, st.kind === 'po');
+    g.live = 1; g.qs = st.qs;
+    s.live = null;
+    if (st.kind === 'po') {
+      var x = s.po.series[st.si];
+      if (g.hs > g.as === (st.h === x.a)) x.wa++; else x.wb++;
+      x.g.push([g.h, g.hs, g.a, g.as]);
+      s.poGames = (s.poGames || []).concat([g]).slice(-30);
+      if (s.po.series.every(seriesDone)) advance();
+    } else { s.games.push(g); endDay(s.livePlayed || {}); }
+    return g;
   }
   function simDays(n) { for (var i = 0; i < n; i++) if (!simDay()) break; }
   function userNextGameDay() {
@@ -180,18 +237,34 @@ var Sim = (function () {
   function newSeries(a, b, conf, sa, sb) { return { a: a, b: b, sa: sa, sb: sb, wa: 0, wb: 0, conf: conf, g: [] }; }
   var HOME = [1, 1, 0, 0, 1, 0, 1]; // 1 = higher seed at home
   function seriesDone(x) { return x.wa === 4 || x.wb === 4; }
-  function simPlayoffDay() {
+  function startPlayoffLive() {
     var s = S(), po = s.po;
-    if (!po || po.stage === 'done') return;
+    if (!po || po.stage === 'done' || po.stage === 'playin') return false;
+    var i = userSeries(); if (i < 0) return false;
+    simPlayoffDay(true);
+    return !!s.live;
+  }
+  function userSeries() {
+    var s = S(), po = s.po; if (!po || !po.series) return -1;
+    for (var i = 0; i < po.series.length; i++) { var x = po.series[i]; if (!seriesDone(x) && (x.a === s.user || x.b === s.user)) return i; }
+    return -1;
+  }
+  function simPlayoffDay(live) {
+    var s = S(), po = s.po;
+    if (!po || po.stage === 'done' || s.live) return;
     if (po.stage === 'playin') { runPlayIn(); return; }
-    po.series.forEach(function (x) {
+    po.series.forEach(function (x, i) {
       if (seriesDone(x)) return;
+      if (live && (x.a === s.user || x.b === s.user)) {
+        var n0 = x.wa + x.wb, hi0 = HOME[n0] ? x.a : x.b, lo0 = hi0 === x.a ? x.b : x.a;
+        s.live = Live.create(hi0, lo0, { kind: 'po', si: i }); return;
+      }
       var n = x.wa + x.wb, hi = HOME[n] ? x.a : x.b, lo = hi === x.a ? x.b : x.a;
       var r = playSingle(hi, lo);
       if (r.w === x.a) x.wa++; else x.wb++;
       x.g.push([r.g.h, r.g.hs, r.g.a, r.g.as]);
     });
-    if (po.series.every(seriesDone)) advance();
+    if (!s.live && po.series.every(seriesDone)) advance();
   }
   function advance() {
     var s = S(), po = s.po, win = po.series.map(function (x) { return x.wa === 4 ? x.a : x.b; });
@@ -229,19 +302,19 @@ var Sim = (function () {
   }
   function simPlayoffs(untilUserOut) {
     var s = S(), guard = 0;
-    while (s.phase === 'playoffs' && s.po.stage !== 'done' && guard++ < 200) simPlayoffDay();
+    while (s.phase === 'playoffs' && !s.live && s.po.stage !== 'done' && guard++ < 200) simPlayoffDay();
   }
   function simSeries() {
     var s = S(), po = s.po; if (!po) return;
     if (po.stage === 'playin') { runPlayIn(); return; }
     var r = po.round, guard = 0;
-    while (s.phase === 'playoffs' && po.round === r && po.stage !== 'done' && guard++ < 10) simPlayoffDay();
+    while (s.phase === 'playoffs' && !s.live && po.round === r && po.stage !== 'done' && guard++ < 10) simPlayoffDay();
   }
 
   function awards() {
     var s = S(), best = null, roy = null, P = s.players;
     for (var k in P) {
-      var p = P[k]; if (!L.team(p.t) || p.st.g < 40) continue;
+      var p = P[k]; if (!L.team(p.t) || p.st.g < (s.len || 82) * 0.45) continue;
       var t = L.team(p.t), wp = t.w / Math.max(1, t.w + t.l);
       var sc = (p.st.pts + p.st.reb * 1.1 + p.st.ast * 1.4 + (p.st.stl + p.st.blk) * 1.5) / p.st.g * (0.6 + wp) + p.ovr * 0.3;
       if (!best || sc > best.sc) best = { p: p, sc: sc };
@@ -271,5 +344,5 @@ var Sim = (function () {
     Off.startOffseason();
   }
 
-  return { newSeason: newSeason, simDay: simDay, simDays: simDays, simNextGame: simNextGame, tradeOpen: tradeOpen, standings: standings, startPlayoffs: startPlayoffs, simPlayoffDay: simPlayoffDay, simPlayoffs: simPlayoffs, simSeries: simSeries, seriesDone: seriesDone, playGame: playGame, makeSchedule: makeSchedule, GAMES: GAMES };
+  return { startUserGame: startUserGame, finishLive: finishLive, userSeries: userSeries, userNextGameDay: userNextGameDay, newSeason: newSeason, simDay: simDay, simDays: simDays, simNextGame: simNextGame, tradeOpen: tradeOpen, standings: standings, startPlayoffs: startPlayoffs, simPlayoffDay: simPlayoffDay, simPlayoffs: simPlayoffs, simSeries: simSeries, seriesDone: seriesDone, playGame: playGame, makeSchedule: makeSchedule, GAMES: GAMES };
 })();

@@ -58,7 +58,7 @@ var UI = (function () {
   function modal(html) {
     var m = U.$('#modal'); m.innerHTML = '<div class="mbox">' + html + '</div>'; m.classList.add('show');
   }
-  function closeModal() { U.$('#modal').classList.remove('show'); U.$('#modal').innerHTML = ''; }
+  function closeModal() { var m = U.$('#modal'), sh = m.classList.contains('sheet'); m.classList.remove('show'); m.classList.remove('sheet'); m.innerHTML = ''; if (sh) { var y = window.scrollY; render(); window.scrollTo(0, y); } }
   function phaseName() {
     var s = S();
     return { fantasy: 'FANTASY DRAFT', regular: s.day < s.deadline ? 'REGULAR SEASON' : 'POST DEADLINE', playoffs: 'PLAYOFFS', lottery: 'DRAFT LOTTERY', draft: 'NBA DRAFT', resign: 'RE-SIGN PLAYERS', fa: 'FREE AGENCY' }[s.phase] || s.phase.toUpperCase();
@@ -71,6 +71,7 @@ var UI = (function () {
     var app = U.$('#app'), s = S();
     if (st.view === 'title' || st.view === 'newgame' || !s) { app.innerHTML = V[st.view === 'newgame' ? 'newgame' : 'title'](st.p); return; }
     var t = s.teams[s.user];
+    if (st.view === 'live') { app.innerHTML = '<main class="livem">' + V.live(st.p) + '</main>'; return; }
     var head = '<header class="top" style="--tc:' + t.c1 + '">' + logo(s.user, 34) + '<div class="tinfo"><div class="tname">' + U.esc(t.city + ' ' + t.name) + '</div><div class="tsub">' + U.seasonLabel(s.season) + ' &middot; ' + t.w + '-' + t.l + ' &middot; ' + phaseName() + '</div></div></header>';
     var body = (V[st.view] || V.home)(st.p);
     var nav = s.phase === 'fantasy' ? '' : '<nav class="tabs">' + TABS.map(function (x) { return '<button data-a="tab" data-v="' + x[0] + '" class="' + (st.view === x[0] ? 'on' : '') + '">' + icon(x[0]) + '<span>' + x[1] + '</span></button>'; }).join('') + '</nav>';
@@ -116,7 +117,7 @@ var UI = (function () {
         '<button class="mode" data-a="ngmode" data-m="create"><div class="mt">CREATE A TEAM</div><div class="md">Make your own franchise. It joins the league and every team re-drafts from scratch in a fantasy draft.</div></button></div>';
     } else if (p.step === 'control') {
       var ids = NBA_TEAMS.slice().sort(function (a, b) { return a.city.localeCompare(b.city); });
-      h += '<h2>PICK YOUR TEAM</h2><label class="tog"><input type="checkbox" id="fdtog" ' + (p.fantasy ? 'checked' : '') + ' data-a="fdtog"> <span>FANTASY DRAFT (reset every roster)</span></label><div class="tgrid">' +
+      h += '<h2>PICK YOUR TEAM</h2>' + lenPick(p) + '<label class="tog"><input type="checkbox" id="fdtog" ' + (p.fantasy ? 'checked' : '') + ' data-a="fdtog"> <span>FANTASY DRAFT (reset every roster)</span></label><div class="tgrid">' +
         ids.map(function (t) {
           var pay = U.sum(NBA_PLAYERS.filter(function (x) { return x.t === t.id; }), function (x) { return x.sal[0] || 0; });
           var top = NBA_PLAYERS.filter(function (x) { return x.t === t.id; }).sort(function (a, b) { return b.ovr - a.ovr; })[0];
@@ -130,7 +131,7 @@ var UI = (function () {
         '<label>CITY<input id="f_city" maxlength="18" value="' + U.esc(c.city) + '" placeholder="Milwaukee"></label>' +
         '<label>TEAM NAME<input id="f_name" maxlength="16" value="' + U.esc(c.name) + '" placeholder="Blades"></label>' +
         '<label>ABBREVIATION (2-4 letters)<input id="f_id" maxlength="4" value="' + U.esc(c.id) + '" placeholder="MKB"></label>' +
-        '<div class="lbl">CONFERENCE</div><div class="seg"><button data-a="ngconf" data-c="E" class="' + (c.conf === 'E' ? 'on' : '') + '">EAST</button><button data-a="ngconf" data-c="W" class="' + (c.conf === 'W' ? 'on' : '') + '">WEST</button></div>' +
+        lenPick(p) + '<div class="lbl">CONFERENCE</div><div class="seg"><button data-a="ngconf" data-c="E" class="' + (c.conf === 'E' ? 'on' : '') + '">EAST</button><button data-a="ngconf" data-c="W" class="' + (c.conf === 'W' ? 'on' : '') + '">WEST</button></div>' +
         '<div class="lbl">MAIN COLOR</div><div class="sw">' + COLORS.map(function (x) { return '<button data-a="ngcol" data-k="c1" data-c="' + x + '" style="background:' + x + '" class="' + (c.c1 === x ? 'on' : '') + '"></button>'; }).join('') + '</div>' +
         '<div class="lbl">SECOND COLOR</div><div class="sw">' + COLORS.map(function (x) { return '<button data-a="ngcol" data-k="c2" data-c="' + x + '" style="background:' + x + '" class="' + (c.c2 === x ? 'on' : '') + '"></button>'; }).join('') + '</div>' +
         '<p class="dim">Your team joins as the 31st team. Every roster gets wiped and the whole league does a 14-round fantasy draft. Real contracts and draft picks stay.</p>' +
@@ -138,6 +139,12 @@ var UI = (function () {
     }
     return h + '</div>';
   };
+  var LENS = [20, 41, 58, 82];
+  function lenPick(p) {
+    var v = p.len || 82;
+    return '<div class="lbl">GAMES PER SEASON</div><div class="seg">' + LENS.map(function (n) { return '<button data-a="nglen" data-n="' + n + '" class="' + (v === n ? 'on' : '') + '">' + n + '</button>'; }).join('') + '</div>';
+  }
+  A.nglen = function (d) { if (st.p.c) readForm(); if (U.$('#fdtog')) st.p.fantasy = U.$('#fdtog').checked; st.p.len = +d.n; var y = window.scrollY; render(); window.scrollTo(0, y); };
   function readForm() {
     var c = st.p.c; if (!c) return;
     ['city', 'name', 'id'].forEach(function (k) { var e = U.$('#f_' + k); if (e) c[k] = e.value.trim(); });
@@ -152,7 +159,7 @@ var UI = (function () {
   A.ngstart = function () {
     if (!st.p.team) return;
     var fantasy = U.$('#fdtog') ? U.$('#fdtog').checked : false;
-    L.newLeague({ mode: 'control', team: st.p.team, fantasy: fantasy, slot: st.p.slot });
+    L.newLeague({ mode: 'control', team: st.p.team, fantasy: fantasy, slot: st.p.slot, len: st.p.len || 82 });
     save(); go('home');
   };
   A.ngcreate = function () {
@@ -161,7 +168,7 @@ var UI = (function () {
     if (c.id.length < 2) { U.toast('Abbreviation needs 2-4 letters.'); return; }
     if (NBA_TEAMS.some(function (t) { return t.id === c.id; }) || c.id === 'FA' || c.id === 'DC') { U.toast(c.id + ' is taken by a real team. Pick another.'); return; }
     if (c.c1 === c.c2) { U.toast('Pick two different colors.'); return; }
-    L.newLeague({ mode: 'create', fantasy: true, slot: st.p.slot, custom: { id: c.id, city: c.city, name: c.name, c1: c.c1, c2: c.c2, conf: c.conf } });
+    L.newLeague({ mode: 'create', fantasy: true, slot: st.p.slot, len: st.p.len || 82, custom: { id: c.id, city: c.city, name: c.name, c1: c.c1, c2: c.c2, conf: c.conf } });
     save(); go('home');
   };
   A.tab = function (d) { go(d.v); };

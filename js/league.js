@@ -152,7 +152,7 @@ var L = (function () {
 
   // brand-new league
   function newLeague(o) {
-    var s = { v: 1, slot: o.slot, mode: o.mode, user: null, season: FIRST_SEASON, phase: 'regular', day: 0, teams: {}, players: {}, picks: [], news: [], history: [], awards: [], nextPid: 1, created: Date.now(), tradeLog: [] };
+    var s = { v: 1, len: o.len || 82, slot: o.slot, mode: o.mode, user: null, season: FIRST_SEASON, phase: 'regular', day: 0, teams: {}, players: {}, picks: [], news: [], history: [], awards: [], nextPid: 1, created: Date.now(), tradeLog: [] };
     G.S = s;
     NBA_TEAMS.forEach(function (t) {
       s.teams[t.id] = { id: t.id, city: t.city, name: t.name, c1: t.c1, c2: t.c2, conf: t.conf, logo: t.logo, w: 0, l: 0, dead: [], order: null, strat: 'contend' };

@@ -47,7 +47,10 @@
       return h;
     }
     var rn = ['FIRST ROUND', 'CONF SEMIFINALS', 'CONF FINALS', 'NBA FINALS'][po.round - 1];
-    h += '<div class="row"><button class="btn gold" data-a="po" data-n="day">NEXT GAME DAY</button><button class="btn" data-a="po" data-n="round">SIM ROUND</button><button class="btn" data-a="po" data-n="all">SIM TO THE END</button></div>';
+    var usi = Sim.userSeries();
+    if (s.live) h += '<button class="btn gold big" data-a="play">RESUME YOUR GAME</button>';
+    else if (usi >= 0) { var ux = s.po.series[usi]; h += '<div class="card next"><div class="lbl">YOUR SERIES &middot; GAME ' + (ux.wa + ux.wb + 1) + '</div><div class="mu">' + UI.logo(ux.a, 40) + '<div class="vs">' + ux.wa + ' - ' + ux.wb + '</div>' + UI.logo(ux.b, 40) + '</div><button class="btn gold big" data-a="play">PLAY GAME ' + (ux.wa + ux.wb + 1) + '</button></div>'; }
+    h += '<div class="row"><button class="btn ' + (usi >= 0 ? '' : 'gold') + '" data-a="po" data-n="day">' + (usi >= 0 ? 'SIM GAME' : 'NEXT GAME DAY') + '</button><button class="btn" data-a="po" data-n="round">SIM ROUND</button><button class="btn" data-a="po" data-n="all">SIM TO THE END</button></div>';
     h += '<div class="card"><div class="lbl">' + rn + '</div>' + po.series.map(function (x) {
       var me = x.a === s.user || x.b === s.user;
       return '<div class="series ' + (me ? 'me' : '') + '"><div class="sr">' + UI.logo(x.a, 22) + ' <span class="sd">' + x.sa + '</span> ' + U.esc(L.shortName(x.a)) + '<b>' + x.wa + '</b></div><div class="sr">' + UI.logo(x.b, 22) + ' <span class="sd">' + x.sb + '</span> ' + U.esc(L.shortName(x.b)) + '<b>' + x.wb + '</b></div>' + (x.g.length ? '<div class="dim small">Last: ' + x.g[x.g.length - 1][0] + ' ' + x.g[x.g.length - 1][1] + ', ' + x.g[x.g.length - 1][2] + ' ' + x.g[x.g.length - 1][3] + '</div>' : '') + '</div>';
@@ -57,9 +60,15 @@
   };
   A.po = function (d) {
     var s = S();
+    if (s.live) { Live.simAll(s.live); Sim.finishLive(); if (d.n === 'day') { UI.save(); if (s.phase !== 'playoffs') UI.champModal(); else UI.render(); return; } }
     if (d.n === 'day') Sim.simPlayoffDay(); else if (d.n === 'round') Sim.simSeries(); else Sim.simPlayoffs();
     UI.save();
-    if (s.phase !== 'playoffs') { var hst = s.history[0]; UI.render(); UI.modal('<h3>' + U.esc(L.teamName(hst.champ).toUpperCase()) + ' WIN THE TITLE</h3><div class="center">' + UI.logo(hst.champ, 90) + '</div><p>Finals: beat the ' + U.esc(L.shortName(hst.runner)) + '. MVP: ' + U.esc(hst.mvp ? hst.mvp.n : '-') + '. Rookie of the Year: ' + U.esc(hst.roy ? hst.roy.n : '-') + '.</p><p>Your season: ' + hst.rec + ', ' + hst.finish + '.</p><div class="row"><button class="btn gold" data-a="close">TO THE LOTTERY</button></div>'); return; }
+    if (s.phase !== 'playoffs') { UI.champModal(); return; }
+    UI.render();
+  };
+  UI.champModal = function () {
+    var s = S();
+    { var hst = s.history[0]; UI.render(); UI.modal('<h3>' + U.esc(L.teamName(hst.champ).toUpperCase()) + ' WIN THE TITLE</h3><div class="center">' + UI.logo(hst.champ, 90) + '</div><p>Finals: beat the ' + U.esc(L.shortName(hst.runner)) + '. MVP: ' + U.esc(hst.mvp ? hst.mvp.n : '-') + '. Rookie of the Year: ' + U.esc(hst.roy ? hst.roy.n : '-') + '.</p><p>Your season: ' + hst.rec + ', ' + hst.finish + '.</p><div class="row"><button class="btn gold" data-a="close">TO THE LOTTERY</button></div>'); return; }
     UI.render();
   };
 

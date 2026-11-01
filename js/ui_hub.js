@@ -9,34 +9,59 @@
     var ph = { fantasy: V.fantasy, playoffs: V.playoffs, lottery: V.lottery, draft: V.draft, resign: V.resign, fa: V.fa }[s.phase];
     if (ph) return ph(p);
     var t = L.team(s.user), h = '';
-    var nd = -1;
-    for (var d = s.day; d < s.sched.length; d++) if (s.sched[d].some(function (m) { return m[0] === s.user || m[1] === s.user; })) { nd = d; break; }
-    if (nd >= 0) {
-      var m = s.sched[nd].filter(function (m) { return m[0] === s.user || m[1] === s.user; })[0], home = m[0] === s.user, opp = home ? m[1] : m[0], ot = L.team(opp);
-      h += '<div class="card next"><div class="lbl">NEXT GAME &middot; DAY ' + (nd + 1) + '</div><div class="mu">' + UI.logo(s.user, 46) + '<div class="vs">' + (home ? 'VS' : '@') + '</div>' + UI.logo(opp, 46) + '<div class="mut"><div class="b">' + U.esc(L.teamName(opp)) + '</div><div class="dim">' + ot.w + '-' + ot.l + ' &middot; OVR ' + L.teamRating(opp).toFixed(0) + '</div></div></div></div>';
+    var last = t.last || [], streak = 0;
+    for (var i = last.length - 1; i >= 0 && last[i] === last[last.length - 1]; i--) streak++;
+    var gp = t.w + t.l;
+    h += '<div class="hero" style="--tc:' + t.c1 + ';--tc2:' + t.c2 + '">' + UI.logo(s.user, 64) + '<div class="hrec"><div class="hw">' + t.w + '<span>-</span>' + t.l + '</div><div class="hsub">' + U.ord(confRank(s.user) || 1) + ' IN THE ' + (t.conf === 'E' ? 'EAST' : 'WEST') + (streak && gp ? ' &middot; ' + last[last.length - 1] + streak : '') + '</div></div>' +
+      '<div class="hstats"><div><b>' + L.teamRating(s.user).toFixed(1) + '</b><span>OVR</span></div><div><b>' + gp + '/' + (s.len || 82) + '</b><span>GAMES</span></div><div data-a="strat" class="link"><b>' + (t.strat === 'rebuild' ? 'REBUILD' : 'WIN NOW') + '</b><span>MODE</span></div></div></div>';
+    if (s.live) {
+      var lv = s.live;
+      h += '<div class="card next live"><div class="lbl">GAME IN PROGRESS</div><div class="mu">' + UI.logo(lv.a, 40) + '<div class="vs">' + lv.sc.a + ' - ' + lv.sc.h + '</div>' + UI.logo(lv.h, 40) + '<div class="mut dim">' + (lv.q <= 4 ? 'Q' + lv.q : 'OT') + ' ' + Live.clockStr(lv.clock) + '</div></div><button class="btn gold big" data-a="play">RESUME GAME</button></div>';
+    } else {
+      var nd = Sim.userNextGameDay();
+      if (nd >= 0) {
+        var m = s.sched[nd].filter(function (m) { return m[0] === s.user || m[1] === s.user; })[0], home = m[0] === s.user, opp = home ? m[1] : m[0], ot = L.team(opp);
+        h += '<div class="card next"><div class="lbl">NEXT GAME &middot; GAME ' + (gp + 1) + '</div><div class="mu">' + UI.logo(s.user, 46) + '<div class="vs">' + (home ? 'VS' : '@') + '</div>' + UI.logo(opp, 46) + '<div class="mut"><div class="b">' + U.esc(L.teamName(opp)) + '</div><div class="dim">' + ot.w + '-' + ot.l + ' &middot; OVR ' + L.teamRating(opp).toFixed(1) + '</div></div></div>' +
+          '<div class="row"><button class="btn gold big" data-a="play">PLAY GAME</button></div><button class="btn wide" data-a="sim" data-n="game">SIM THIS GAME</button></div>';
+      }
     }
     var short = L.roster(s.user).length < L.ROSTER_MIN;
     if (short) h += '<div class="warn">You need at least ' + L.ROSTER_MIN + ' players to play. <button class="btn sm gold" data-a="autofill">SIGN MIN PLAYERS</button> or go to LEAGUE &gt; FREE AGENTS.</div>';
-    h += '<div class="simgrid">' +
-      '<button class="btn gold" data-a="sim" data-n="game">NEXT GAME</button>' +
-      '<button class="btn" data-a="sim" data-n="week">SIM WEEK</button>' +
+    h += '<div class="simgrid3"><button class="btn" data-a="sim" data-n="week">SIM WEEK</button>' +
       (s.day < s.deadline ? '<button class="btn" data-a="sim" data-n="deadline">TO DEADLINE</button>' : '') +
       '<button class="btn" data-a="sim" data-n="season">TO PLAYOFFS</button></div>';
     if (s.day < s.deadline) h += '<div class="dim small center">Trade deadline in ' + (s.deadline - s.day) + ' days</div>';
-    var last = t.last || [];
-    h += '<div class="card stats3"><div><b>' + U.ord(confRank(s.user) || 1) + '</b><span>' + (t.conf === 'E' ? 'EAST' : 'WEST') + '</span></div><div><b>' + L.teamRating(s.user).toFixed(1) + '</b><span>TEAM OVR</span></div><div><b>' + last.filter(function (x) { return x === 'W'; }).length + '-' + last.filter(function (x) { return x === 'L'; }).length + '</b><span>LAST 10</span></div><div><b>' + (t.strat === 'rebuild' ? 'REBUILD' : 'WIN NOW') + '</b><span data-a="strat" class="link">MODE</span></div></div>';
+    var mine = s.games.filter(function (g) { return g.h === s.user || g.a === s.user; }).slice(-5).reverse();
+    if (mine.length) h += '<div class="card"><div class="hrow"><div class="lbl">RECENT GAMES</div><button class="btn ghost sm" data-a="tab" data-v="sched">SCHEDULE</button></div><div class="recent">' + mine.map(gameChip).join('') + '</div></div>';
+    else h += '<button class="btn ghost wide" data-a="tab" data-v="sched">FULL SCHEDULE</button>';
     h += '<div class="card"><div class="lbl">SALARY CAP ' + U.seasonLabel(s.season) + '</div>' + UI.capBar(s.user) + '</div>';
-    var lg = s.games.filter(function (g) { return g.box; }).slice(-1)[0];
-    if (lg) h += lastGame(lg);
-    h += newsList(8);
+    h += newsList(6);
     return h;
   };
-  function lastGame(g) {
-    var s = S(), mine = g.h === s.user ? g.box.h : g.box.a, ms = g.h === s.user ? g.hs : g.as, os = g.h === s.user ? g.as : g.hs, opp = g.h === s.user ? g.a : g.h;
-    var w = ms > os;
-    return '<div class="card"><div class="lbl">LAST GAME</div><div class="lg"><span class="res ' + (w ? 'w' : 'l') + '">' + (w ? 'W' : 'L') + '</span> ' + ms + '-' + os + (g.ot ? ' OT' : '') + ' ' + (g.h === s.user ? 'vs' : '@') + ' ' + U.esc(L.teamName(opp)) + '</div>' +
-      '<table class="tbl"><tr><th>PLAYER</th><th>MIN</th><th>PTS</th><th>REB</th><th>AST</th></tr>' + mine.slice(0, 6).map(function (l) { return '<tr data-a="player" data-id="' + l.id + '"><td>' + U.esc(l.n) + '</td><td>' + l.min + '</td><td><b>' + l.pts + '</b></td><td>' + l.reb + '</td><td>' + l.ast + '</td></tr>'; }).join('') + '</table></div>';
+  function gameChip(g) {
+    var s = S(), me = g.h === s.user, ms = me ? g.hs : g.as, os = me ? g.as : g.hs, opp = me ? g.a : g.h, w = ms > os;
+    return '<div class="gchip ' + (w ? 'w' : 'l') + '" data-a="gbox" data-i="' + s.games.indexOf(g) + '">' + UI.logo(opp, 24) + '<div class="gr">' + (w ? 'W' : 'L') + '</div><div class="gs">' + ms + '-' + os + '</div>' + (g.live ? '<div class="gp">PLAYED</div>' : '') + '</div>';
   }
+  A.gbox = function (d) { UI.boxModal(S().games[+d.i]); };
+  V.sched = function () {
+    var s = S(), h = '<h2>SCHEDULE</h2>';
+    if (s.phase !== 'regular') return h + '<div class="card dim">The regular season is over.</div>';
+    var played = s.games.filter(function (g) { return g.h === s.user || g.a === s.user; });
+    h += '<div class="dim small">' + (s.len || 82) + '-game season. Tap a played game for its box score. Change the season length in MORE.</div>';
+    played.forEach(function (g, i) {
+      var me = g.h === s.user, ms = me ? g.hs : g.as, os = me ? g.as : g.hs, opp = me ? g.a : g.h, w = ms > os;
+      h += '<div class="srow" data-a="gbox" data-i="' + s.games.indexOf(g) + '"><span class="sn2">' + (i + 1) + '</span>' + UI.logo(opp, 24) + '<span class="so">' + (me ? 'vs ' : '@ ') + U.esc(L.shortName(opp)) + '</span><span class="res ' + (w ? 'w' : 'l') + '">' + (w ? 'W' : 'L') + '</span><b>' + ms + '-' + os + (g.ot ? ' OT' : '') + '</b>' + (g.live ? '<span class="gp">PLAYED</span>' : '') + '</div>';
+    });
+    var n = played.length;
+    for (var d = s.day; d < s.sched.length; d++) {
+      s.sched[d].forEach(function (m) {
+        if (m[0] !== s.user && m[1] !== s.user) return;
+        n++; var home = m[0] === s.user, opp = home ? m[1] : m[0], t = L.team(opp);
+        h += '<div class="srow up"><span class="sn2">' + n + '</span>' + UI.logo(opp, 24) + '<span class="so">' + (home ? 'vs ' : '@ ') + U.esc(L.shortName(opp)) + '</span><span class="dim">' + t.w + '-' + t.l + '</span>' + (n === played.length + 1 && !s.live ? '<button class="btn gold sm" data-a="play">PLAY</button>' : '') + '</div>';
+      });
+    }
+    return h;
+  };
   function newsList(n) {
     var s = S();
     return '<div class="card"><div class="lbl">LEAGUE NEWS</div>' + (s.news.slice(0, n).map(function (x) { return '<div class="news ' + x.k + '">' + U.esc(x.m) + '</div>'; }).join('') || '<div class="dim">Nothing yet.</div>') + (n < 50 ? '<button class="btn ghost sm" data-a="tab" data-v="news">ALL NEWS</button>' : '') + '</div>';
@@ -59,6 +84,7 @@
   A.sim = function (d) {
     var s = S();
     if (L.roster(s.user).length < L.ROSTER_MIN) { U.toast('Sign players first: you need ' + L.ROSTER_MIN + '.'); return; }
+    if (s.live) { Live.simAll(s.live); Sim.finishLive(); if (d.n === 'game') { UI.save(); UI.render(); return; } }
     var before = s.day;
     if (d.n === 'game') Sim.simNextGame();
     else if (d.n === 'week') Sim.simDays(7);
@@ -197,6 +223,8 @@
   // ---------- more ----------
   V.more = function () {
     var s = S(), c = L.capFor(), h = '<h2>FRONT OFFICE</h2>';
+    var ln = s.len || 82, pend = s.lenNext && s.lenNext !== ln;
+    h += '<div class="card"><div class="lbl">GAMES PER SEASON</div><div class="seg">' + [20, 41, 58, 82].map(function (n) { return '<button data-a="setlen" data-n="' + n + '" class="' + ((s.lenNext || ln) === n ? 'on' : '') + '">' + n + '</button>'; }).join('') + '</div><div class="dim small">' + (pend ? 'This season stays at ' + ln + ' games. Next season will be ' + s.lenNext + '.' : 'Right now: ' + ln + ' games. Changing it in the middle of a season starts next season.') + '</div></div>';
     h += '<div class="card"><div class="lbl">PAYROLL BY SEASON</div><table class="tbl"><tr><th>SEASON</th><th>PAYROLL</th><th>VS CAP</th></tr>';
     for (var y = 0; y < 5; y++) {
       var pay = L.payrollYear(s.user, y), cap = c.cap * Math.pow(1.07, y);
@@ -210,6 +238,13 @@
     h += '<div class="card"><div class="lbl">HOW IT WORKS</div><div class="small">Sim games from HOME. Make trades before the deadline (about 60% through the season). After the playoffs: Draft Lottery, NBA Draft, re-sign your guys, then 3 days of free agency. Players get better or older every summer. Your game saves itself after every move.</div></div>';
     h += '<div class="row"><button class="btn" data-a="tab" data-v="news">NEWS</button><button class="btn gold" data-a="exit">SAVE &amp; EXIT</button></div>';
     return h;
+  };
+  A.setlen = function (d) {
+    var s = S(), n = +d.n;
+    if (s.phase === 'regular' && s.day === 0 && !s.live) { s.len = n; s.lenNext = null; Sim.newSeason(); U.toast('New ' + n + '-game schedule made.'); }
+    else if (s.phase === 'regular' || s.phase === 'playoffs') { s.lenNext = n === s.len ? null : n; U.toast(n === s.len ? 'Staying at ' + n + ' games.' : 'Next season will be ' + n + ' games.'); }
+    else { s.len = n; s.lenNext = null; U.toast('Next season will be ' + n + ' games.'); }
+    UI.save(); UI.render();
   };
   A.exit = function () { UI.save(); G.S = null; UI.go('title'); };
 })();

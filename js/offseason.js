@@ -318,6 +318,7 @@ var Off = (function () {
       if (p.r && old) { var f = 1 + (p.ovr - old) * 0.035; p.r[0] = Math.round(p.r[0] * f * 10) / 10; p.r[2] = Math.round(p.r[2] * (1 + (p.ovr - old) * 0.02) * 10) / 10; }
       p.prog = p.ovr - old;
     }
+    if (s.lenNext) { s.len = s.lenNext; s.lenNext = null; }
     Sim.newSeason();
     makeDraftClass();
     L.news('The ' + U.seasonLabel(s.season) + ' season is here.', 'big');
