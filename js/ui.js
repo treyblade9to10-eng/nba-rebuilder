@@ -120,7 +120,7 @@ var UI = (function () {
         ids.map(function (t) {
           var pay = U.sum(NBA_PLAYERS.filter(function (x) { return x.t === t.id; }), function (x) { return x.sal[0] || 0; });
           var top = NBA_PLAYERS.filter(function (x) { return x.t === t.id; }).sort(function (a, b) { return b.ovr - a.ovr; })[0];
-          return '<button class="tcard ' + (p.team === t.id ? 'on' : '') + '" data-a="ngteam" data-id="' + t.id + '" style="--tc:' + t.c1 + '"><img class="logo" loading="lazy" src="' + t.logo + '" width="38" height="38"><div class="tc1">' + U.esc(t.city) + '</div><div class="tc2">' + U.esc(t.name) + '</div><div class="tc3">' + U.money(pay) + (top ? ' &middot; ' + U.esc(top.n.split(' ').slice(-1)[0]) + ' ' + top.ovr : '') + '</div></button>';
+          return '<button class="tcard ' + (p.team === t.id ? 'on' : '') + '" data-a="ngteam" data-id="' + t.id + '" style="--tc:' + t.c1 + '"><img class="logo" loading="lazy" src="' + t.logo + '" width="38" height="38"><div class="tc1">' + U.esc(t.city) + '</div><div class="tc2">' + U.esc(t.name) + '</div><div class="tc3">' + U.money(pay) + (top ? ' &middot; ' + U.esc(top.n.replace(/ (Jr\.|Sr\.|II|III|IV)$/, '').split(' ').slice(-1)[0]) + ' ' + top.ovr : '') + '</div></button>';
         }).join('') + '</div>' +
         '<div class="stick"><button class="btn gold big" data-a="ngstart" ' + (p.team ? '' : 'disabled') + '>' + (p.team ? 'START WITH THE ' + U.esc(NBA_TEAMS.filter(function (t) { return t.id === p.team; })[0].name.toUpperCase()) : 'PICK A TEAM') + '</button></div>';
     } else if (p.step === 'create') {
