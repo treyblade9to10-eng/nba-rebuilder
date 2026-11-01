@@ -88,7 +88,7 @@ var UI = (function () {
 
   // ---------- title ----------
   V.title = function () {
-    var h = '<div class="title"><div class="brand"><div class="b1">NBA</div><div class="b2">REBUILDER</div><div class="b3">REAL ' + U.seasonLabel(2027) + ' ROSTERS &middot; REAL CONTRACTS &middot; REAL CAP</div></div><div class="slots">';
+    var h = '<div class="title"><div class="brand"><img class="applogo" src="icons/icon-192.png" width="120" height="120" alt=""><div class="b1">NBA</div><div class="b2">REBUILDER</div><div class="b3">REAL ' + U.seasonLabel(2027) + ' ROSTERS &middot; REAL CONTRACTS &middot; REAL CAP</div></div><div class="slots">';
     for (var i = 1; i <= SLOTS; i++) {
       var info = slotInfo(i);
       if (info) {
