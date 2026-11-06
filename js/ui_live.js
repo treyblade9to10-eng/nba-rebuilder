@@ -168,6 +168,26 @@
   A.lshoot = function () { fire(); };
 
   // ---- entry points ----
+  // say who won: re-sim the game until the right team wins, then keep those stats
+  A.pickwin = function (d) {
+    var s = S();
+    if (L.roster(s.user).length < L.ROSTER_MIN) { U.toast('Sign players first: you need ' + L.ROSTER_MIN + '.'); return; }
+    if (s.live) { U.toast('Finish or sim the game in progress first.'); return; }
+    if (!Sim.startUserGame()) { U.toast('No game to play right now.'); UI.render(); return; }
+    var base = s.live, wantMe = d.w === 'me', best = null;
+    for (var i = 0; i < 1500; i++) {
+      var st = Live.create(base.h, base.a, { kind: base.kind, si: base.si });
+      Live.simAll(st);
+      var meWon = st.sc[st.user] > st.sc[st.user === 'h' ? 'a' : 'h'];
+      if (meWon === wantMe) { best = st; break; }
+    }
+    if (!best) { U.toast('Could not make that happen. Try playing it.'); return; }
+    s.live = best;
+    var kind = best.kind, g = Sim.finishLive();
+    UI.save(); UI.go('home');
+    if (kind === 'po' && s.phase !== 'playoffs') { UI.champModal(); return; }
+    if (g) UI.boxModal(g);
+  };
   A.play = function () {
     var s = S();
     if (L.roster(s.user).length < L.ROSTER_MIN) { U.toast('Sign players first: you need ' + L.ROSTER_MIN + '.'); return; }

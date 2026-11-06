@@ -22,7 +22,7 @@
       if (nd >= 0) {
         var m = s.sched[nd].filter(function (m) { return m[0] === s.user || m[1] === s.user; })[0], home = m[0] === s.user, opp = home ? m[1] : m[0], ot = L.team(opp);
         h += '<div class="card next"><div class="lbl">NEXT GAME &middot; GAME ' + (gp + 1) + '</div><div class="mu">' + UI.logo(s.user, 46) + '<div class="vs">' + (home ? 'VS' : '@') + '</div>' + UI.logo(opp, 46) + '<div class="mut"><div class="b">' + U.esc(L.teamName(opp)) + '</div><div class="dim">' + ot.w + '-' + ot.l + ' &middot; OVR ' + L.teamRating(opp).toFixed(1) + '</div></div></div>' +
-          '<div class="row"><button class="btn gold big" data-a="play">PLAY GAME</button></div><button class="btn wide" data-a="sim" data-n="game">SIM THIS GAME</button></div>';
+          '<div class="row"><button class="btn gold big" data-a="play">PLAY GAME</button></div><button class="btn wide" data-a="sim" data-n="game">SIM THIS GAME</button><button class="btn ghost wide" data-a="compare" data-id="' + opp + '">COMPARE ROSTERS</button>' + '<div class="lbl" style="margin-top:10px">ALREADY PLAYED IT? PICK THE WINNER</div><div class="wpick"><button class="btn" data-a="pickwin" data-w="me">' + U.esc(L.shortName(s.user).toUpperCase()) + ' WON</button><button class="btn" data-a="pickwin" data-w="them">' + U.esc(L.shortName(opp).toUpperCase()) + ' WON</button></div>' + '</div>';
       }
     }
     var short = L.roster(s.user).length < L.ROSTER_MIN;
@@ -116,7 +116,7 @@
   V.roster = function (p) {
     var s = S(), t = L.team(s.user); L.fixOrder(s.user);
     var list = t.order.map(L.player).filter(Boolean);
-    var h = '<div class="hrow"><h2>ROSTER <span class="dim">' + list.length + '/' + L.ROSTER_MAX + '</span></h2><button class="btn sm" data-a="autolineup">BEST LINEUP</button></div>';
+    var h = '<div class="hrow"><h2>ROSTER <span class="dim">' + list.length + '/' + L.ROSTER_MAX + '</span></h2><div><button class="btn sm" data-a="compare">COMPARE</button> <button class="btn sm" data-a="autolineup">BEST LINEUP</button></div></div>';
     h += '<div class="dim small">Tap a player to move him in the lineup, trade or release him. Top 5 start. Top 10 play.</div>';
     list.forEach(function (pl, i) {
       if (i === 0) h += '<div class="sect">STARTERS</div>';
@@ -212,12 +212,68 @@
   V.team = function (p) {
     var s = S(), t = L.team(p.id), ros = L.roster(p.id).sort(function (a, b) { return b.ovr - a.ovr; });
     var h = '<button class="back" data-a="tab" data-v="league">BACK</button><div class="thead" style="--tc:' + t.c1 + '">' + UI.logo(p.id, 56) + '<div><h2>' + U.esc(L.teamName(p.id)) + '</h2><div class="dim">' + t.w + '-' + t.l + ' &middot; OVR ' + L.teamRating(p.id).toFixed(1) + ' &middot; ' + (t.strat === 'rebuild' ? 'Rebuilding' : 'Contending') + '</div></div></div>';
+    if (p.id !== s.user) h += '<button class="btn wide" data-a="compare" data-id="' + p.id + '">COMPARE WITH MY TEAM</button>';
     if (p.id !== s.user && Sim.tradeOpen()) h += '<button class="btn gold wide" data-a="tradewith" data-id="' + p.id + '">TRADE WITH THEM</button>';
     h += '<div class="card">' + UI.capBar(p.id) + '</div>';
     h += ros.map(function (pl) { return UI.playerRow(pl, '<div class="pst">' + UI.ppg(pl) + '</div>'); }).join('');
     h += '<div class="card"><div class="lbl">DRAFT PICKS</div>' + (L.picksOf(p.id).map(function (k) { return '<span class="chip">' + L.pickLabel(k) + '</span>'; }).join('') || '<div class="dim">None</div>') + '</div>';
     return h;
   };
+  // ---------- compare rosters ----------
+  function lineup(tid) {
+    var s = S(), t = L.team(tid); L.fixOrder(tid);
+    var list = (tid === s.user ? t.order.map(L.player).filter(Boolean) : L.roster(tid).sort(function (a, b) { return b.ovr - a.ovr; }));
+    var healthy = list.filter(function (p) { return !(p.inj > 0); }), hurt = list.filter(function (p) { return p.inj > 0; });
+    return healthy.concat(hurt);
+  }
+  function avg(a, f) { return a.length ? U.sum(a, f) / a.length : 0; }
+  function cmpRow(lbl, a, b, fmt, lowGood) {
+    var w = a === b ? 0 : (a > b) !== !!lowGood ? 1 : 2;
+    return '<div class="crow"><b class="' + (w === 1 ? 'cw' : '') + '">' + fmt(a) + '</b><span>' + lbl + '</span><b class="' + (w === 2 ? 'cw' : '') + '">' + fmt(b) + '</b></div>';
+  }
+  function pcell(p) {
+    if (!p) return '<div class="cp empty">-</div>';
+    return '<div class="cp" data-a="player" data-id="' + p.id + '">' + UI.ovrTag(p.ovr) + '<div class="pmain"><div class="pname">' + U.esc(p.n) + '</div><div class="psub">' + p.pos + ' &middot; ' + p.age + 'y' + (p.inj > 0 ? ' &middot; <span class="neg">OUT</span>' : '') + '</div></div></div>';
+  }
+  V.compare = function (p) {
+    var s = S(), a = s.user, b = p.id;
+    var ids = L.teamIds().filter(function (id) { return id !== a; }).sort(function (x, y) { return L.teamName(x).localeCompare(L.teamName(y)); });
+    var nd = Sim.userNextGameDay && Sim.userNextGameDay();
+    if (!b && nd >= 0 && s.sched[nd]) { var m = s.sched[nd].filter(function (m) { return m[0] === a || m[1] === a; })[0]; if (m) b = m[0] === a ? m[1] : m[0]; }
+    if (!b) b = ids[0];
+    var h = '<button class="back" data-a="tab" data-v="roster">BACK</button><h2>COMPARE</h2><div class="tpart">' + UI.logo(b, 36) + '<select data-ch="cmpteam">' + ids.map(function (id) { return '<option value="' + id + '"' + (id === b ? ' selected' : '') + '>' + U.esc(L.teamName(id)) + '</option>'; }).join('') + '</select></div>';
+    var A1 = lineup(a), B1 = lineup(b), ta = L.team(a), tb = L.team(b);
+    h += '<div class="chead"><div>' + UI.logo(a, 44) + '<b>' + U.esc(L.shortName(a)) + '</b><span>' + ta.w + '-' + ta.l + '</span></div><div class="cvs">VS</div><div>' + UI.logo(b, 44) + '<b>' + U.esc(L.shortName(b)) + '</b><span>' + tb.w + '-' + tb.l + '</span></div></div>';
+    var sa = A1.slice(0, 5), sb = B1.slice(0, 5), ba = A1.slice(5, 10), bb = B1.slice(5, 10);
+    h += '<div class="card">' +
+      cmpRow('TEAM OVR', L.teamRating(a), L.teamRating(b), function (x) { return x.toFixed(1); }) +
+      cmpRow('STARTERS OVR', avg(sa, function (p) { return p.ovr; }), avg(sb, function (p) { return p.ovr; }), function (x) { return x.toFixed(1); }) +
+      cmpRow('BENCH OVR', avg(ba, function (p) { return p.ovr; }), avg(bb, function (p) { return p.ovr; }), function (x) { return x.toFixed(1); }) +
+      cmpRow('BEST PLAYER', (A1.slice().sort(function (x, y) { return y.ovr - x.ovr; })[0] || {}).ovr || 0, (B1.slice().sort(function (x, y) { return y.ovr - x.ovr; })[0] || {}).ovr || 0, function (x) { return x; }) +
+      cmpRow('AVG POTENTIAL', avg(A1, function (p) { return p.pot; }), avg(B1, function (p) { return p.pot; }), function (x) { return x.toFixed(1); }) +
+      cmpRow('AVG AGE', avg(A1, function (p) { return p.age; }), avg(B1, function (p) { return p.age; }), function (x) { return x.toFixed(1); }, true) +
+      cmpRow('PAYROLL', L.payroll(a), L.payroll(b), U.money, true) +
+      cmpRow('PTS / GAME', ta.w + ta.l ? ta.pf / (ta.w + ta.l) : 0, tb.w + tb.l ? tb.pf / (tb.w + tb.l) : 0, function (x) { return x ? x.toFixed(1) : '-'; }) +
+      cmpRow('ALLOWED / GAME', ta.w + ta.l ? ta.pa / (ta.w + ta.l) : 0, tb.w + tb.l ? tb.pa / (tb.w + tb.l) : 0, function (x) { return x ? x.toFixed(1) : '-'; }, true) +
+      cmpRow('1ST ROUND PICKS', L.picksOf(a).filter(function (k) { return k.r === 1; }).length, L.picksOf(b).filter(function (k) { return k.r === 1; }).length, function (x) { return x; }) +
+      '</div>';
+    function grid(title, x, y, n) {
+      var g = '<div class="lbl">' + title + '</div><div class="cgrid">';
+      for (var i = 0; i < n; i++) {
+        var pa = x[i], pb = y[i], d = (pa ? pa.ovr : 0) - (pb ? pb.ovr : 0);
+        g += pcell(pa) + '<div class="cd ' + (d > 0 ? 'pos' : d < 0 ? 'neg' : 'dim') + '">' + (d > 0 ? '+' + d : d < 0 ? d : '=') + '</div>' + pcell(pb);
+      }
+      return g + '</div>';
+    }
+    h += grid('STARTERS', sa, sb, 5) + grid('BENCH', ba, bb, 5);
+    var ra = A1.slice(10), rb = B1.slice(10);
+    if (ra.length || rb.length) h += grid('RESERVES', ra, rb, Math.max(ra.length, rb.length));
+    h += '<div class="dim small">Starters are the top 5 in each lineup (injured guys drop to the bottom). The middle number is how much better your guy is.</div>';
+    if (Sim.tradeOpen()) h += '<button class="btn gold wide" data-a="tradewith" data-id="' + b + '">TRADE WITH THEM</button>';
+    return h;
+  };
+  A.compare = function (d) { UI.closeModal(); UI.go('compare', { id: d.id || null }); };
+  A.cmpteam = function (d, el) { UI.go('compare', { id: el.value }); };
   A.tradewith = function (d) { UI.go('trade', { b: d.id }); };
 
   // ---------- more ----------
